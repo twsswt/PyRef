@@ -1,14 +1,11 @@
 import json
-import time
 from os import path
 import threading
-from preprocessing.revision import Rev
-from preprocessing.conditions_match import *
-from ast import *
+from pyref.preprocessing.revision import Rev
 import os
 import time
 import signal
-from preprocessing.utils import to_tree
+from pyref.preprocessing.utils import to_tree
 
 
 class RepeatedTimer(object):
@@ -122,7 +119,7 @@ def extract_refs(args):
     # owner_name = args.repo.split("/")[0]
     # repo_name = args.repo.split("/")[1]
 
-    from repomanager import repo_utils, repo_changes
+    from pyref.repomanager import repo_changes
 
     repo_path = args.repopath
     if args.skip is not None:
@@ -148,7 +145,8 @@ def validate(args):
     validations["project"] = validations["project"].apply(lambda x: x.split(",")[0])
     validations = validations.to_dict("records")
 
-    from repomanager import repo_utils, repo_changes
+    from pyref.repomanager import repo_changes
+    from pyref.repomanager import repo_utils
 
     for validation in validations:
         if validation["commit"] == "bf9c26bb128d50ff8369c3bc7fbfc63d066d1ea8" or not "false" in validation["correct"]:

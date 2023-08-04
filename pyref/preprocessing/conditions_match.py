@@ -1,12 +1,11 @@
-from ast import *
 import ast
 import astunparse
 import editdistance
-from preprocessing.node_transformer import nodeReplace, replaceProt
+from pyref.preprocessing.node_transformer import nodeReplace, replaceProt
 import pandas as pd
 
-from preprocessing.refactorings_info import RefInfo
-from preprocessing.utils import get_node_index
+from pyref.preprocessing.refactorings_info import RefInfo
+from pyref.preprocessing.utils import get_node_index
 
 
 def body_mapper(methods1, method2, heuristic_info):

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from preprocessing.refactoring_heuristics import extract_method_ref, method_signature_change_ref, inline_method_ref, \
+from pyref.preprocessing.refactoring_heuristics import extract_method_ref, method_signature_change_ref, inline_method_ref, \
     move_method_ref, change_class_signature
 
 

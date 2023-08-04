@@ -3,7 +3,7 @@ from anytree import findall, Node
 import astunparse
 import pandas as pd
 
-from preprocessing.node_transformer import nodeReplace
+from pyref.preprocessing.node_transformer import nodeReplace
 
 
 def to_tree(parent_node):

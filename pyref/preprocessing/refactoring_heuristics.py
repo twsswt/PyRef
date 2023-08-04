@@ -1,10 +1,9 @@
-import ast
 import pandas as pd
 import editdistance
-from preprocessing.refactorings_info import RefInfo
-from preprocessing.conditions_match import body_mapper
-from preprocessing.refactorings import ExtractInlineRef, RenameRef, MoveRef, ClassRef, ExtractVarRef
-from preprocessing.utils import intersection, get_stmts_recursive, is_extracted
+from pyref.preprocessing.refactorings_info import RefInfo
+from pyref.preprocessing.conditions_match import body_mapper
+from pyref.preprocessing.refactorings import ExtractInlineRef, RenameRef, MoveRef, ClassRef
+from pyref.preprocessing.utils import intersection
 
 
 def extract_method_ref(common_methods, added_methods):

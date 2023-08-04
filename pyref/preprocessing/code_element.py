@@ -1,11 +1,10 @@
 from dataclasses import dataclass, field
-from ast import *
 import ast
 import astunparse
 import editdistance
-from preprocessing.diff_code_element import DiffModule, DiffClass
-from preprocessing.node_transformer import nodeReplace
-from preprocessing.utils import get_statement_elements, to_tree, get_expression_elements, different_code_element, \
+from pyref.preprocessing.diff_code_element import DiffModule, DiffClass
+from pyref.preprocessing.node_transformer import nodeReplace
+from pyref.preprocessing.utils import get_statement_elements, to_tree, get_expression_elements, different_code_element, \
     ast_to_str, ast_comp_to_str, final_leaf, get_stmts_recursive
 
 

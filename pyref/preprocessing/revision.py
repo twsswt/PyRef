@@ -2,9 +2,9 @@ import ast
 
 import astunparse
 from anytree import findall
-from preprocessing.code_element import Method, Class, Module, Statement, CompositeStatement
-from preprocessing.diff_code_element import DiffRev
-from preprocessing.utils import get_statement_elements, get_expression_elements, different_code_element
+from pyref.preprocessing.code_element import Method, Class, Module, Statement, CompositeStatement
+from pyref.preprocessing.diff_code_element import DiffRev
+from pyref.preprocessing.utils import get_statement_elements, get_expression_elements, different_code_element
 
 
 class Rev:

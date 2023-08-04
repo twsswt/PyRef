@@ -3,27 +3,27 @@ import sys
 
 
 def repo_changes_access(args):
-    from repomanager import repo_changes
+    from pyref.repomanager import repo_changes
     repo_changes.repo_changes_args(args)
 
 
 def clone_repo_access(args):
-    from repomanager import repo_utils
+    from pyref.repomanager import repo_utils
     repo_utils.clone_repo_args(args)
 
 
 def build_diff_lists_access(args):
-    from preprocessing import diff_list
+    from pyref.preprocessing import diff_list
     diff_list.build_diff_lists_args(args)
 
 
 def validate_results(args):
-    from preprocessing import diff_list
+    from pyref.preprocessing import diff_list
     diff_list.validate(args)
 
 
 def extract_refs(args):
-    from preprocessing import diff_list
+    from pyref.preprocessing import diff_list
     diff_list.extract_refs(args)
 
 
