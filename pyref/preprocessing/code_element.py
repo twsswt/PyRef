@@ -7,6 +7,7 @@ from pyref.preprocessing.node_transformer import nodeReplace
 from pyref.preprocessing.utils import get_statement_elements, to_tree, get_expression_elements, different_code_element, \
     ast_to_str, ast_comp_to_str, final_leaf, get_stmts_recursive
 
+from ast import *
 
 @dataclass
 class Module:
