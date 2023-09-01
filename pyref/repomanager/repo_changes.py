@@ -21,13 +21,16 @@ def last_commit_changes(repo_path):
     return df
 
 
-def all_commits(repo_path, specific_commits=None):
+def all_commits(repo_path, specific_commits=None, changes_directory=None):
     repo = Repo(repo_path)
 
-    path_to_create = repo_path + "/changes/"
+    if changes_directory is None:
+        _changes_directory = repo_path + "/changes/"
+    else:
+        _changes_directory = changes_directory
 
     try:
-        os.mkdir(path_to_create)
+        os.mkdir(_changes_directory)
     except OSError:
         print("Commit history already extracted, updating data.")
 
@@ -58,7 +61,7 @@ def all_commits(repo_path, specific_commits=None):
                     {"Path": path, "oldFileContent": old_file_content, "currentFileContent": current_file_content})
 
                 df = pd.DataFrame(modified_files)
-                df.to_csv(repo_path + "/changes/" + str(commit) + ".csv", index=False)
+                df.to_csv(f'{_changes_directory}{os.sep}/{str(commit)}.csv', index=False)
 
 
 def repo_changes_args(args):

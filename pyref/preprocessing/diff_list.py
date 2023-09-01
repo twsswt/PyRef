@@ -7,6 +7,9 @@ import time
 import signal
 from pyref.preprocessing.utils import to_tree
 
+import pandas as pd
+from ast import  *
+
 
 class RepeatedTimer(object):
     # from https://stackoverflow.com/a/40965385
@@ -107,9 +110,10 @@ def build_diff_lists(changes_path, commit=None, directory=None, skip_time=None):
         data["Commit"] = ref[1]
         json_outputs.append(data)
         # ref[0].to_graph()
-    changes_path = changes_path.replace('//', '/')
-    repo_name = changes_path.split("/")[-3]
-    with open(repo_name + '_data.json', 'w') as outfile:
+
+    json_path = f'{changes_path}{os.sep}refactorings.json'
+
+    with open(json_path, 'w') as outfile:
         outfile.write(json.dumps(json_outputs, indent=4))
 
     return refactorings
