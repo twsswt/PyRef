@@ -10,6 +10,8 @@ from pyref.preprocessing.utils import to_tree
 import pandas as pd
 from ast import  *
 
+import logging
+
 
 class RepeatedTimer(object):
     # from https://stackoverflow.com/a/40965385
@@ -41,82 +43,73 @@ class RepeatedTimer(object):
 
 
 def timeout_handler(num, stack):
-    print("Commit skipped due to the long processing time")
+    logging.warn("Commit skipped due to the long processing time")
     raise TimeoutError
 
 
 def execution_reminder():
-    print("Please wait, the process is still running. ", time.ctime())
+    logging.info("Please wait, the process is still running. ", time.ctime())
+
+
+def _handle_single_commit(changes_path, commit_id_str, refactorings, directory=None, skip_time=None):
+    commit_file_path = f'{changes_path}{os.sep}{commit_id_str}.csv'
+    df = pd.read_csv(commit_file_path)
+    if directory is not None:
+        df = df[df["Path"].isin(directory)]
+
+    rev_a = Rev()
+    rev_b = Rev()
+    df.apply(lambda row: populate(row, rev_a, rev_b), axis=1)
+
+    if skip_time is not None:
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(int(float(skip_time) * 60))
+    rt = RepeatedTimer(480, execution_reminder)
+    try:
+        rev_difference = rev_a.revision_difference(rev_b)
+        refs = rev_difference.get_refactorings()
+        for refactoring in refs:
+            refactorings.append((refactoring, commit_id_str))
+            logging.debug("Found refactoring [%s]", str(refactoring))
+
+    except Exception as e:
+        logging.warn("Failed to process commit.", e)
+    except TimeoutError as e:
+        logging.warn("Commit skipped due to the long processing time")
+    finally:
+        rt.stop()
+        if skip_time is not None:
+            signal.alarm(0)
 
 
 def build_diff_lists(changes_path, commit=None, directory=None, skip_time=None):
-    refactorings = []
-    t0 = time.time()
+    refactorings = list()
+
     if commit is not None:
-        print(commit)
-        name = commit + ".csv"
-        df = pd.read_csv(changes_path + "/" + name)
-        if directory is not None:
-            df = df[df["Path"].isin(directory)]
-        rev_a = Rev()
-        rev_b = Rev()
-        df.apply(lambda row: populate(row, rev_a, rev_b), axis=1)
-        # try:
-        rev_difference = rev_a.revision_difference(rev_b)
-        refs = rev_difference.get_refactorings()
-        for ref in refs:
-            refactorings.append((ref, name.split(".")[0]))
-            print(">>>", str(ref))
+        _handle_single_commit(changes_path, commit, refactorings, directory, skip_time)
     else:
         for root, dirs, files in os.walk(changes_path):
-            for ind, name in enumerate(files):
-                if name.endswith(".csv"):
-                    print(ind, '/', len(files), ' --- ', name[:-4])
-                    df = pd.read_csv(changes_path + "/" + name)
-                    if directory is not None:
-                        df = df[df["Path"].isin(directory)]
-                    rev_a = Rev()
-                    rev_b = Rev()
-                    df.apply(lambda row: populate(row, rev_a, rev_b), axis=1)
-                    if skip_time is not None:
-                        signal.signal(signal.SIGALRM, timeout_handler)
-                        signal.alarm(int(float(skip_time)*60))
-                    rt = RepeatedTimer(480, execution_reminder)
-                    try:
-                        rev_difference = rev_a.revision_difference(rev_b)
-                        refs = rev_difference.get_refactorings()
-                        for ref in refs:
-                            refactorings.append((ref, name.split(".")[0]))
-                            print(">>>", str(ref))
-                    except Exception as e:
-                        print("Failed to process commit.", e)
-                    except TimeoutError as e:
-                        print("Commit skipped due to the long processing time")
-                    finally:
-                        rt.stop()
-                        if skip_time is not None:
-                            signal.alarm(0)
+            for _, commit_file_name in enumerate(files):
+                if commit_file_name.endswith(".csv"):
+                    commit_id_str = commit_file_name.split(".")[0]
+                    _handle_single_commit(changes_path, commit_id_str, refactorings, directory)
 
-    t1 = time.time()
-    total = t1 - t0
-    print("-----------------------------------------------------------------------------------------------------------")
-    print("Total Time:", total)
-    print("Total Number of Refactorings:", len(refactorings))
-    refactorings.sort(key=lambda x: x[1])
-    json_outputs = []
-    for ref in refactorings:
-        print("commit: %3s - %s" % (ref[1], str(ref[0]).strip()))
-        data = ref[0].to_json_format()
-        data["Commit"] = ref[1]
-        json_outputs.append(data)
-        # ref[0].to_graph()
-
-    json_path = f'{changes_path}{os.sep}refactorings.json'
-
-    with open(json_path, 'w') as outfile:
-        outfile.write(json.dumps(json_outputs, indent=4))
+    output_refactorings_to_json(changes_path, refactorings)
 
     return refactorings
+
+
+def output_refactorings_to_json(changes_path, refactorings):
+    refactorings.sort(key=lambda x: x[1])
+    json_outputs = list()
+    for refactoring in refactorings:
+        logging.info("commit=[%3s]; refactoring=[%s]", refactoring[1], str(refactoring[0]).strip())
+        data = refactoring[0].to_json_format()
+        data["Commit"] = refactoring[1]
+        json_outputs.append(data)
+    json_path = f'{changes_path}{os.sep}refactorings.json'
+    with open(json_path, 'w') as outfile:
+        outfile.write(json.dumps(json_outputs, indent=4))
 
 
 def extract_refs(args):
