@@ -1,4 +1,5 @@
 import ast
+import logging
 import os
 import astunparse
 import pandas as pd
@@ -22,17 +23,17 @@ def last_commit_changes(repo_path):
 
 
 def all_commits(repo_path, specific_commits=None, changes_directory=None):
-    repo = Repo(repo_path)
+    repo = Repo(repo_path, search_parent_directories=True)
 
     if changes_directory is None:
-        _changes_directory = repo_path + "/changes/"
+        _changes_directory = repo_path + f'{repo_path}{os.sep}changes'
     else:
         _changes_directory = changes_directory
 
     try:
         os.mkdir(_changes_directory)
     except OSError:
-        print("Commit history already extracted, updating data.")
+        logging.info("Commit history already extracted, updating data.")
 
     commits = []
     for commit in repo.iter_commits():

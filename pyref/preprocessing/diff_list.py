@@ -103,7 +103,7 @@ def output_refactorings_to_json(changes_path, refactorings):
     refactorings.sort(key=lambda x: x[1])
     json_outputs = list()
     for refactoring in refactorings:
-        logging.info("commit=[%3s]; refactoring=[%s]", refactoring[1], str(refactoring[0]).strip())
+        logging.debug("Exporting commit=[%3s]; refactoring=[%s]", refactoring[1], str(refactoring[0]).strip())
         data = refactoring[0].to_json_format()
         data["Commit"] = refactoring[1]
         json_outputs.append(data)
