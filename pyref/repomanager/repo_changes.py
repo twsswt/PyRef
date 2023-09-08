@@ -1,6 +1,8 @@
 import ast
 import logging
 import os
+import pathlib
+
 import astunparse
 import pandas as pd
 from git import Repo
@@ -31,7 +33,7 @@ def all_commits(repo_path, specific_commits=None, changes_directory=None):
         _changes_directory = changes_directory
 
     try:
-        os.mkdir(_changes_directory)
+        pathlib.Path(_changes_directory).mkdir(parents=True, exist_ok=True)
     except OSError:
         logging.info("Commit history already extracted, updating data.")
 
