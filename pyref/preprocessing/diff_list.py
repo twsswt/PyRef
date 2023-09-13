@@ -1,26 +1,27 @@
 import json
-from os import path
-import threading
-from pyref.preprocessing.revision import Rev
+import logging
 import os
-import time
+import pathlib
 import signal
-from pyref.preprocessing.utils import to_tree
+import time
+import threading
+
+from os import path
 
 import pandas as pd
-from ast import  *
+from ast import *
 
-import logging
+import pandas.errors
+
+from pyref.preprocessing.revision import Rev
+from pyref.preprocessing.utils import to_tree
 
 
 class RepeatedTimer(object):
     # from https://stackoverflow.com/a/40965385
-    def __init__(self, interval, function, *args, **kwargs):
+    def __init__(self, interval):
         self._timer = None
         self.interval = interval
-        self.function = function
-        self.args = args
-        self.kwargs = kwargs
         self.is_running = False
         self.next_call = time.time()
         self.start()
@@ -28,7 +29,7 @@ class RepeatedTimer(object):
     def _run(self):
         self.is_running = False
         self.start()
-        self.function(*self.args, **self.kwargs)
+        logging.warning("Commit skipped due to the long processing time")
 
     def start(self):
         if not self.is_running:
@@ -43,17 +44,16 @@ class RepeatedTimer(object):
 
 
 def timeout_handler(num, stack):
-    logging.warn("Commit skipped due to the long processing time")
+    logging.warning("Commit skipped due to the long processing time")
     raise TimeoutError
 
 
-def execution_reminder():
-    logging.info("Please wait, the process is still running. ", time.ctime())
+def _get_refactorings_from_commit_diffs_file(commit_file_path, directory=None, skip_time=None):
+    try:
+        df = pd.read_csv(commit_file_path)
+    except pandas.errors.EmptyDataError:
+        return list()
 
-
-def _handle_single_commit(changes_path, commit_id_str, refactorings, directory=None, skip_time=None):
-    commit_file_path = f'{changes_path}{os.sep}{commit_id_str}.csv'
-    df = pd.read_csv(commit_file_path)
     if directory is not None:
         df = df[df["Path"].isin(directory)]
 
@@ -64,52 +64,63 @@ def _handle_single_commit(changes_path, commit_id_str, refactorings, directory=N
     if skip_time is not None:
         signal.signal(signal.SIGALRM, timeout_handler)
         signal.alarm(int(float(skip_time) * 60))
-    rt = RepeatedTimer(480, execution_reminder)
+    rt = RepeatedTimer(480)
     try:
         rev_difference = rev_a.revision_difference(rev_b)
-        refs = rev_difference.get_refactorings()
-        for refactoring in refs:
-            refactorings.append((refactoring, commit_id_str))
-            logging.debug("Found refactoring [%s]", str(refactoring))
+        return list(rev_difference.get_refactorings())
 
     except Exception as e:
-        logging.warn("Failed to process commit.", e)
+        logging.warning(f'Failed to process commit file {commit_file_path}.', e)
     except TimeoutError as e:
-        logging.warn("Commit skipped due to the long processing time")
+        logging.warning(f'Commit file {commit_file_path} skipped due to the long processing time.')
     finally:
         rt.stop()
         if skip_time is not None:
             signal.alarm(0)
 
 
-def build_diff_lists(changes_path, commit=None, directory=None, skip_time=None):
-    refactorings = list()
+def _output_refactorings_to_json(commit_id_str, refactorings, project_refactorings_dir):
+    logging.debug('Exporting commit=[%3s]; with [%n] refactorings.', commit_id_str, len(refactorings))
+    json_root_object = {
+        'commit': commit_id_str,
+        'refactorings': [refactoring.to_json_format() for refactoring in refactorings]
+    }
 
-    if commit is not None:
-        _handle_single_commit(changes_path, commit, refactorings, directory, skip_time)
-    else:
-        for root, dirs, files in os.walk(changes_path):
-            for _, commit_file_name in enumerate(files):
-                if commit_file_name.endswith(".csv"):
-                    commit_id_str = commit_file_name.split(".")[0]
-                    _handle_single_commit(changes_path, commit_id_str, refactorings, directory)
+    with open(f'{project_refactorings_dir}{os.sep}{commit_id_str}', 'w') as outfile:
+        outfile.write(json.dumps(json_root_object, indent=4))
 
-    output_refactorings_to_json(changes_path, refactorings)
+
+def extract_refactorings_for_commit(
+        commit_id_str,
+        changes_path,
+        directory=None,
+        skip_time=None,
+        project_refactorings_dir_name=None):
+
+    commit_diffs_path = f'{changes_path}{os.sep}{commit_id_str}.csv'
+    refactorings = _get_refactorings_from_commit_diffs_file(commit_diffs_path, directory, skip_time)
+
+    if project_refactorings_dir_name is not None:
+        _output_refactorings_to_json(commit_id_str, refactorings, project_refactorings_dir_name)
 
     return refactorings
 
 
-def output_refactorings_to_json(changes_path, refactorings):
-    refactorings.sort(key=lambda x: x[1])
-    json_outputs = list()
-    for refactoring in refactorings:
-        logging.debug("Exporting commit=[%3s]; refactoring=[%s]", refactoring[1], str(refactoring[0]).strip())
-        data = refactoring[0].to_json_format()
-        data["Commit"] = refactoring[1]
-        json_outputs.append(data)
-    json_path = f'{changes_path}{os.sep}refactorings.json'
-    with open(json_path, 'w') as outfile:
-        outfile.write(json.dumps(json_outputs, indent=4))
+def build_diff_lists(changes_path, directory=None, skip_time=None, project_refactorings_dir=None):
+
+    pathlib.Path(project_refactorings_dir).mkdir(parents=True, exist_ok=True)
+
+    refactorings = list()
+
+    for root, dirs, files in os.walk(changes_path):
+        for _, commit_file_name in enumerate(files):
+            if commit_file_name.endswith(".csv"):
+                commit_id_str = commit_file_name.split(".")[0]
+                commit_refactorings = extract_refactorings_for_commit(
+                    commit_id_str, changes_path, directory, skip_time, project_refactorings_dir)
+                refactorings.append((commit_id_str, commit_refactorings))
+
+    return refactorings
 
 
 def extract_refs(args):
@@ -125,12 +136,12 @@ def extract_refs(args):
     else:
         skip_time = None
     if args.commit is not None:
-        repo_changes.all_commits(repo_path, [args.commit])
+        repo_changes.differences_from_all_commits(repo_path, [args.commit])
         print("\nExtracting Refs...")
         build_diff_lists(repo_path + "/changes/", args.commit, args.directory, skip_time)
     else:
         print("\nExtracting commit history...")
-        repo_changes.all_commits(repo_path)
+        repo_changes.differences_from_all_commits(repo_path)
         print("\nExtracting Refs...")
         build_diff_lists(repo_path + "/changes/", args.directory, skip_time=skip_time)
 
@@ -159,7 +170,7 @@ def validate(args):
             time.sleep(1)
 
         path_to_repo = "./Repos/" + repo[1]
-        repo_changes.all_commits(path_to_repo, [validation["commit"]])
+        repo_changes.differences_from_all_commits(path_to_repo, [validation["commit"]])
 
         while not path.exists("./Repos/" + repo[1] + "/changes/" + validation["commit"] + ".csv"):
             time.sleep(1)
@@ -171,7 +182,7 @@ def validate(args):
 
 
 def populate(row, rev_a, rev_b):
-    path = row["Path"]
+    path = row["path"]
     rav_a_tree = to_tree(eval(row["oldFileContent"]))
     rev_b_tree = to_tree(eval(row["currentFileContent"]))
     rev_a.extract_code_elements(rav_a_tree, path)

@@ -1,74 +1,83 @@
 import ast
-import logging
 import os
 import pathlib
 
-import astunparse
 import pandas as pd
 from git import Repo
 
 
-# get the the changes in the latest commits and store them in a dataframe
-def last_commit_changes(repo_path):
-    modified_files = []
-    repo = Repo(repo_path)
-    for item in repo.head.commit.diff('HEAD~1').iter_change_type('M'):  # TODO: for now only modified files
-        path = item.a_path
-        if path.endswith('.py'):
-            old_file_content = ast.dump(ast.parse(repo.git.show(f'HEAD~1:{path}')))
-            current_file_content = ast.dump(ast.parse(repo.git.show(f'HEAD:{path}')))
-            modified_files.append(
-                {"Path": path, "oldFileContent": old_file_content, "currentFileContent": current_file_content})
-    df = pd.DataFrame(modified_files)
-    df.to_csv("changes.csv", index=False)
-    return df
+def repository_commits(repo, specific_commits=None):
+    result = list()
 
-
-def all_commits(repo_path, specific_commits=None, changes_directory=None):
-    repo = Repo(repo_path, search_parent_directories=True)
-
-    if changes_directory is None:
-        _changes_directory = repo_path + f'{repo_path}{os.sep}changes'
-    else:
-        _changes_directory = changes_directory
-
-    try:
-        pathlib.Path(_changes_directory).mkdir(parents=True, exist_ok=True)
-    except OSError:
-        logging.info("Commit history already extracted, updating data.")
-
-    commits = []
     for commit in repo.iter_commits():
-        if specific_commits is not None:
-            if str(commit) in specific_commits:
-                commits.append(commit)
-        else:
-            commits.append(commit)
-    for count, commit in enumerate(commits):
-        modified_files = []
-        if len(commit.parents) == 0 or len(commit.parents) > 1:
-            continue
+        if specific_commits is None:
+            result.append(commit)
+        elif str(commit) in specific_commits:
+            result.append(commit)
+
+    return result
+
+
+def _get_item_content_from_commit(commit, item, repo):
+    return ast.dump(ast.parse(repo.git.show(f'{commit.hexsha}:{item.a_path}')), include_attributes=True)
+
+
+def extract_commit_differences(repo, commit, changes_directory):
+
+    modified_files = list()
+
+    if len(commit.parents) > 0:
+
         for item in commit.diff(commit.parents[0]).iter_change_type('M'):
             path = item.a_path
             if path.endswith('.py'):
                 try:
-                    old_file_content = ast.dump(ast.parse(repo.git.show('%s:%s' % (commit.parents[0].hexsha,
-                                                                                   item.a_path))),
-                                                include_attributes=True)
-                    current_file_content = ast.dump(ast.parse(repo.git.show('%s:%s' % (commit.hexsha,
-                                                                                       item.a_path))),
-                                                    include_attributes=True)
-                except Exception as e:
+                    old_item_content = _get_item_content_from_commit(commit.parents[0], item, repo)
+                    current_item_content = _get_item_content_from_commit(commit, item, repo)
+                except Exception as _:
                     continue
-                modified_files.append(
-                    {"Path": path, "oldFileContent": old_file_content, "currentFileContent": current_file_content})
 
-                df = pd.DataFrame(modified_files)
-                df.to_csv(f'{_changes_directory}{os.sep}/{str(commit)}.csv', index=False)
+                modified_files.append(
+                    {'path': path,
+                     'oldFileContent': old_item_content,
+                     'currentFileContent': current_item_content
+                     })
+
+    data_frame = pd.DataFrame(modified_files)
+    pathlib.Path(changes_directory).mkdir(parents=True, exist_ok=True)
+    data_frame.to_csv(f'{changes_directory}{os.sep}/{str(commit)}.csv', index=False)
+    return data_frame
+
+
+def differences_from_commits(repo, specific_commits=None, changes_directory=None):
+
+    _changes_directory = f'{repo.working_dir}{os.sep}changes' if not changes_directory else changes_directory
+
+    result = list()
+
+    commits = repository_commits(repo, specific_commits)
+
+    for commit in commits:
+        if len(commit.parents) == 1:
+            commit_differences = extract_commit_differences(commit, repo, _changes_directory)
+            result.append((commit, commit_differences))
+
+    return result
+
+
+def last_commit_changes(repo_path, changes_directory=None):
+    repo = Repo(repo_path)
+    commit = repo.head.commit
+
+    _changes_directory = f'{repo.working_dir}{os.sep}changes' if not changes_directory else changes_directory
+
+    if len(commit.parents) == 1:
+        commit_differences = extract_commit_differences(repo, commit, changes_directory)
+        commit_differences.to_csv(f'{_changes_directory}{os.sep}/{str(commit)}.csv', index=False)
 
 
 def repo_changes_args(args):
     if args.lastcommit:
         last_commit_changes(args.path)
     if args.allcommits:
-        all_commits(args.path)
+        differences_from_commits(args.path)
