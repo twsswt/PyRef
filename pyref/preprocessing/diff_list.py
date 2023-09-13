@@ -123,71 +123,9 @@ def build_diff_lists(changes_path, directory=None, skip_time=None, project_refac
     return refactorings
 
 
-def extract_refs(args):
-    # owner_name = args.repo.split("/")[0]
-    # repo_name = args.repo.split("/")[1]
-
-    from pyref.repomanager import repo_changes
-
-    repo_path = args.repopath
-    if args.skip is not None:
-        skip_time = args.skip
-        print("\nCommit will be skipped if the processing time is longer than", skip_time, 'minutes.')
-    else:
-        skip_time = None
-    if args.commit is not None:
-        repo_changes.differences_from_all_commits(repo_path, [args.commit])
-        print("\nExtracting Refs...")
-        build_diff_lists(repo_path + "/changes/", args.commit, args.directory, skip_time)
-    else:
-        print("\nExtracting commit history...")
-        repo_changes.differences_from_all_commits(repo_path)
-        print("\nExtracting Refs...")
-        build_diff_lists(repo_path + "/changes/", args.directory, skip_time=skip_time)
-
-
-def validate(args):
-    validations = pd.read_csv(args.path)
-    validations["correct"] = validations["correct"].apply(lambda x: 'true' if x == 1 else 'false')
-    validations = validations.groupby(['commit']).agg(lambda x: ','.join(x)).reset_index()
-    validations["project"] = validations["project"].apply(lambda x: x.split(",")[0])
-    validations = validations.to_dict("records")
-
-    from pyref.repomanager import repo_changes
-    from pyref.repomanager import repo_utils
-
-    for validation in validations:
-        if validation["commit"] == "bf9c26bb128d50ff8369c3bc7fbfc63d066d1ea8" or not "false" in validation["correct"]:
-            continue
-
-        repo = validation["project"].split("_")
-        print(
-            "-----------------------------------------------------------------------------------------------------------")
-        print("Cloning %s/%s" % (repo[0], repo[1]))
-        repo_utils.clone_repo(repo[0], repo[1])
-
-        while not path.exists("./Repos/" + repo[1]):
-            time.sleep(1)
-
-        path_to_repo = "./Repos/" + repo[1]
-        repo_changes.differences_from_all_commits(path_to_repo, [validation["commit"]])
-
-        while not path.exists("./Repos/" + repo[1] + "/changes/" + validation["commit"] + ".csv"):
-            time.sleep(1)
-
-        print("Validation of %s: %s" % (validation["type"], validation["correct"]))
-
-        changes_path = "./Repos/" + repo[1] + "/changes/"
-        build_diff_lists(changes_path, validation["commit"])
-
-
 def populate(row, rev_a, rev_b):
     path = row["path"]
     rav_a_tree = to_tree(eval(row["oldFileContent"]))
     rev_b_tree = to_tree(eval(row["currentFileContent"]))
     rev_a.extract_code_elements(rav_a_tree, path)
     rev_b.extract_code_elements(rev_b_tree, path)
-
-
-def build_diff_lists_args(args):
-    build_diff_lists(args.path, args.commit)
